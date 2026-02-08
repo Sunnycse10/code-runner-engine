@@ -9,11 +9,10 @@ load_dotenv()
 
 app = FastAPI(title="Platform Engine Code Runner")
 
-# Use environment variables for security!
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
-REPO = "Sunnycse10/code-runner-engine" # Update this
+REPO = "Sunnycse10/code-runner-engine" 
 
-db = {} # In-memory DB
+db = {}
 
 @app.post("/submit")
 async def submit(code: str, tests: str, callback_url: str):
@@ -44,10 +43,12 @@ async def submit(code: str, tests: str, callback_url: str):
 async def callback(request: Request):
     data = await request.json()
     sub_id = data.get("submission_id")
-    # Decode result
-    output = base64.b64decode(data.get("output")).decode("utf-8")
-    db[sub_id] = output
-    print(f"--- Result for {sub_id} received ---")
+    job_status = data.get("status")
+    
+    raw_output = data.get("output")
+    output = base64.b64decode(raw_output).decode("utf-8") if raw_output else "No output"
+    db[sub_id] = f"[{job_status.upper()}] {output}"
+    print(f"--- Result for {sub_id} received: {job_status} ---")
     return {"status": "ok"}
 
 @app.get("/status/{sub_id}")

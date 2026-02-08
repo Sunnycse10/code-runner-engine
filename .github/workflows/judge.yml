@@ -6,26 +6,43 @@ on:
 jobs:
   judge:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    
     steps:
-      - name: Setup Environment
+      - name: Setup Files
         run: |
           cat << 'EOF' > solution.py
           ${{ github.event.client_payload.code }}
           EOF
-
           cat << 'EOF' > tests.py
           ${{ github.event.client_payload.tests }}
           EOF
 
-      - name: Execute and Capture
+      - name: Install Tools
+        run: pip install bandit flake8
+
+      - name: Linter (Flake8)
+        id: lint
+        run: flake8 solution.py --count --select=E9,F63,F7,F82 --show-source --statistics
+
+      - name: Security Scan (Bandit)
+        id: security
+        run: bandit -r solution.py
+
+      - name: Execute Logic
         id: run
         run: |
-          # Execute and base64 encode the output to avoid JSON breaking on special characters
-          python3 tests.py > result.txt 2>&1 || echo "Process Exited with Error" >> result.txt
+          # Use a timeout command to kill code that runs too long (e.g., 10 seconds)
+          timeout 10s python3 tests.py > result.txt 2>&1 || echo "Execution Error or Timeout" >> result.txt
           echo "encoded_output=$(cat result.txt | base64 -w 0)" >> $GITHUB_OUTPUT
 
       - name: Dispatch Results
+        if: always() # Ensure this runs even if linting/security fails
         run: |
           curl -X POST "${{ github.event.client_payload.callback_url }}" \
           -H "Content-Type: application/json" \
-          -d '{"submission_id": "${{ github.event.client_payload.submission_id }}", "output": "${{ steps.run.outputs.encoded_output }}"}'
+          -d '{
+            "submission_id": "${{ github.event.client_payload.submission_id }}", 
+            "output": "${{ steps.run.outputs.encoded_output || 'U2VjdXJpdHkgb3IgTGludCBGYWlsdXJl' }}",
+            "status": "${{ job.status }}"
+          }'
