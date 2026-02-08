@@ -1,0 +1,16 @@
+# Python Environment
+venv/
+__pycache__/
+*.pyc
+
+# Environment Variables & Secrets 
+.env
+
+# WSL / OS specific
+.DS_Store
+Thumbs.db
+
+# Project-specific 
+result.txt
+status.txt
+

@@ -1,0 +1,26 @@
+name: Execution_Sandbox
+on:
+  repository_dispatch:
+    types: [run_submission]
+
+jobs:
+  judge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Environment
+        run: |
+          echo "${{ github.event.client_payload.code }}" > solution.py
+          echo "${{ github.event.client_payload.tests }}" > tests.py
+
+      - name: Execute and Capture
+        id: run
+        run: |
+          # Execute and base64 encode the output to avoid JSON breaking on special characters
+          python3 tests.py > result.txt 2>&1 || echo "Process Exited with Error" >> result.txt
+          echo "encoded_output=$(cat result.txt | base64 -w 0)" >> $GITHUB_OUTPUT
+
+      - name: Dispatch Results
+        run: |
+          curl -X POST "${{ github.event.client_payload.callback_url }}" \
+          -H "Content-Type: application/json" \
+          -d '{"submission_id": "${{ github.event.client_payload.submission_id }}", "output": "${{ steps.run.outputs.encoded_output }}"}'
