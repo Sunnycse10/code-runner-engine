@@ -9,8 +9,13 @@ jobs:
     steps:
       - name: Setup Environment
         run: |
-          echo "${{ github.event.client_payload.code }}" > solution.py
-          echo "${{ github.event.client_payload.tests }}" > tests.py
+          cat << 'EOF' > solution.py
+          ${{ github.event.client_payload.code }}
+          EOF
+
+          cat << 'EOF' > tests.py
+          ${{ github.event.client_payload.tests }}
+          EOF
 
       - name: Execute and Capture
         id: run
