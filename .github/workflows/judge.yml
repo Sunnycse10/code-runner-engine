@@ -1,16 +1,17 @@
-name: Execution_Sandbox
+name: Secure_Code_Runner
 on:
   repository_dispatch:
     types: [run_submission]
 
 jobs:
-  judge:
+  execute:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 5 
     
     steps:
-      - name: Setup Files
+      - name: Initialize Workspace
         run: |
+          # Write files locally on the VM first
           cat << 'EOF' > solution.py
           ${{ github.event.client_payload.code }}
           EOF
@@ -18,31 +19,34 @@ jobs:
           ${{ github.event.client_payload.tests }}
           EOF
 
-      - name: Install Tools
-        run: pip install bandit flake8
-
-      - name: Linter (Flake8)
-        id: lint
-        run: flake8 solution.py --count --select=E9,F63,F7,F82 --show-source --statistics
-
-      - name: Security Scan (Bandit)
-        id: security
-        run: bandit -r solution.py
-
-      - name: Execute Logic
-        id: run
+      - name: Run in Hardened Container
+        id: sandbox
         run: |
-          # Use a timeout command to kill code that runs too long (e.g., 10 seconds)
-          timeout 10s python3 tests.py > result.txt 2>&1 || echo "Execution Error or Timeout" >> result.txt
-          echo "encoded_output=$(cat result.txt | base64 -w 0)" >> $GITHUB_OUTPUT
+          # We run the code inside a Docker container for isolation
+          # --network none: Blocks all internet access
+          # --memory: Hard limit on RAM (128MB is plenty for logic)
+          # --cpus: Hard limit on CPU usage
+          # -v: Mounts current directory into /app inside the container
+          
+          docker run --rm \
+            --network none \
+            --memory "128m" \
+            --cpus "0.5" \
+            -v $(pwd):/app \
+            -w /app \
+            python:3.10-slim \
+            bash -c "timeout 5s python3 tests.py" > result.txt 2>&1 || echo "Execution Limit Exceeded or Script Error" >> result.txt
+          
+          # Encode result to Base64 so it can safely pass through the JSON payload
+          echo "output_b64=$(cat result.txt | base64 -w 0)" >> $GITHUB_OUTPUT
 
-      - name: Dispatch Results
-        if: always() # Ensure this runs even if linting/security fails
+      - name: Send Callback
+        if: always() # Ensure the user always gets an answer
         run: |
           curl -X POST "${{ github.event.client_payload.callback_url }}" \
           -H "Content-Type: application/json" \
           -d '{
-            "submission_id": "${{ github.event.client_payload.submission_id }}", 
-            "output": "${{ steps.run.outputs.encoded_output || 'U2VjdXJpdHkgb3IgTGludCBGYWlsdXJl' }}",
-            "status": "${{ job.status }}"
+            "submission_id": "${{ github.event.client_payload.submission_id }}",
+            "status": "${{ job.status }}",
+            "output": "${{ steps.sandbox.outputs.output_b64 || 'Tm8gb3V0cHV0IGdlbmVyYXRlZC4=' }}"
           }'
