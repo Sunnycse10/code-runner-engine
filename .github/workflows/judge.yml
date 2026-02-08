@@ -19,7 +19,7 @@ jobs:
           ${{ github.event.client_payload.tests }}
           EOF
 
-      - name: Run in Hardened Container
+      - name: Run in Container
         id: sandbox
         run: |
           # We run the code inside a Docker container for isolation
