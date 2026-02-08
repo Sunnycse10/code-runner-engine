@@ -13,7 +13,7 @@ REPO = "Sunnycse10/code-runner-engine"
 db = {}
 
 def dispatch_to_github(submission_id: str, code: str, tests: str, callback_url: str):
-    url = f"https://api.github.com/repos/{GITHUB_REPO}/dispatches"
+    url = f"https://api.github.com/repos/{REPO}/dispatches"
     headers = {
         "Authorization": f"token {GITHUB_TOKEN}",
         "Accept": "application/vnd.github.v3+json"
@@ -34,10 +34,8 @@ async def submit_code(request: Request, bg: BackgroundTasks):
     data = await request.json()
     sub_id = str(uuid.uuid4())
     
-    # Track the submission
     db[sub_id] = {"status": "Processing", "result": None}
     
-    # Dispatch the "work" to GitHub in the background
     bg.add_task(
         dispatch_to_github, 
         sub_id, data['code'], data['tests'], data['callback_url']
@@ -50,7 +48,6 @@ async def receive_result(request: Request):
     data = await request.json()
     sub_id = data.get("submission_id")
     
-    # Decode the Base64 output from the sandbox
     encoded_output = data.get("output", "")
     decoded_output = base64.b64decode(encoded_output).decode("utf-8")
     
